@@ -1,0 +1,153 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "siteName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the function app that you wish to create."
+      }
+    },
+    "dockerImageName": {
+      "type": "string",
+      "defaultValue": "nginx:latest"
+    }
+  },
+  "variables": {
+    "servicePlanName": "[concat(parameters('siteName'), '-sp')]",
+    "roleContributor": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+    "roleNameGUID": "f7036b05-3cc5-4159-8f6e-250fcf9e1610",
+    "acrName": "[concat(parameters('siteName'), 'acr')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-05-10",
+      "name": "linkedAcrTemplate",
+      "type": "Microsoft.Resources/deployments",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://hvsc.blob.core.windows.net/ekb/acr.json",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "acrName": {
+            "value": "[variables('acrName')]"
+          },
+          "acrAdminUserEnabled": {
+            "value": true
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "2017-05-10",
+      "name": "linkedAciTemplate",
+      "type": "Microsoft.Resources/deployments",
+      "dependsOn": [
+        "linkedAcrTemplate"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://hvsc.blob.core.windows.net/ekb/aci.json",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "siteName": {
+            "value": "[parameters('siteName')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2017-05-01",
+      "name": "[variables('roleNameGUID')]",
+      "dependsOn": [
+        "linkedAciTemplate"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('roleContributor')]",
+        "principalId": "[reference('linkedAciTemplate').outputs.principalId.value]",
+        "scope": "[resourceGroup().id]"
+      }
+    },
+    {
+      "apiVersion": "2017-05-10",
+      "name": "linkedAciContainerTemplate",
+      "type": "Microsoft.Resources/deployments",
+      "dependsOn": [
+        "[variables('roleNameGUID')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://hvsc.blob.core.windows.net/ekb/aci-import.json",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "siteName": {
+            "value": "[parameters('siteName')]"
+          },
+          "acrName": {
+            "value": "[variables('acrName')]"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-02-01",
+      "type": "Microsoft.Web/serverfarms",
+      "kind": "linux",
+      "name": "[variables('servicePlanName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "linkedAciContainerTemplate"
+      ],
+      "properties": {
+        "name": "[variables('servicePlanName')]",
+        "reserved": true,
+        "numberOfWorkers": "1"
+      },
+      "sku": {
+        "Tier": "Standard",
+        "Name": "S1"
+      }
+    },
+    {
+      "apiVersion": "2018-02-01",
+      "type": "Microsoft.Web/sites",
+      "name": "[parameters('siteName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('servicePlanName'))]"
+      ],
+      "properties": {
+        "siteConfig": {
+          "name": "[parameters('siteName')]",
+          "appSettings": [
+            {
+              "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
+              "value": "false"
+            },
+            {
+              "name": "DOCKER_REGISTRY_SERVER_URL",
+              "value": "[reference('linkedAcrTemplate').outputs.acrLoginServer.value]"
+            },
+            {
+              "name": "DOCKER_REGISTRY_SERVER_USERNAME",
+              "value": "[reference('linkedAcrTemplate').outputs.registryUsername.value]"
+            },
+            {
+              "name": "DOCKER_REGISTRY_SERVER_PASSWORD",
+              "value": "[reference('linkedAcrTemplate').outputs.registryPassword.value]"
+            }
+          ],
+          "linuxFxVersion": "[concat('DOCKER|', reference('linkedAcrTemplate').outputs.acrLoginServer.value, '/', parameters('dockerImageName'))]"
+        },
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('servicePlanName'))]"
+      }
+    }
+  ]
+}
