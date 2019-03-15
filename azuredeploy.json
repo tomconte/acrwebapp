@@ -11,6 +11,20 @@
     "dockerImageName": {
       "type": "string",
       "defaultValue": "nginx:latest"
+    },
+    "_artifactsLocation": {
+        "type": "string",
+        "metadata": {
+            "description": "The base URI where artifacts required by this template are located including a trailing '/'"
+        },
+        "defaultValue": "https://raw.githubusercontent.com/tomconte/acrwebapp/master/"
+    },
+    "_artifactsLocationSasToken": {
+        "type": "securestring",
+        "metadata": {
+            "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated. Use the defaultValue if the staging location is not secured."
+        },
+        "defaultValue": ""
     }
   },
   "variables": {
@@ -27,7 +41,7 @@
       "properties": {
         "mode": "Incremental",
         "templateLink": {
-          "uri": "https://hvsc.blob.core.windows.net/ekb/acr.json",
+          "uri": "[uri(parameters('_artifactsLocation'), concat('acr.json', parameters('_artifactsLocationSasToken')))]",
           "contentVersion": "1.0.0.0"
         },
         "parameters": {
@@ -50,7 +64,7 @@
       "properties": {
         "mode": "Incremental",
         "templateLink": {
-          "uri": "https://hvsc.blob.core.windows.net/ekb/aci.json",
+          "uri": "[uri(parameters('_artifactsLocation'), concat('aci.json', parameters('_artifactsLocationSasToken')))]",
           "contentVersion": "1.0.0.0"
         },
         "parameters": {
@@ -83,7 +97,7 @@
       "properties": {
         "mode": "Incremental",
         "templateLink": {
-          "uri": "https://hvsc.blob.core.windows.net/ekb/aci-import.json",
+          "uri": "[uri(parameters('_artifactsLocation'), concat('aci-import.json', parameters('_artifactsLocationSasToken')))]",
           "contentVersion": "1.0.0.0"
         },
         "parameters": {
