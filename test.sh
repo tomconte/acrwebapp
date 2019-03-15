@@ -4,7 +4,7 @@ echo "START DEPLOYMENT"
 date
 
 az group create --name acrwebapp --location westeurope
-az group deployment create --resource-group acrwebapp --template-file azuredeploy.json --parameters siteName=acrwebapptest
+az group deployment create --resource-group acrwebapp --template-uri https://raw.githubusercontent.com/tomconte/acrwebapp/master/azuredeploy.json --parameters siteName=acrwebapptest
 
 while true
 do
